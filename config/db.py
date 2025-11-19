@@ -2,7 +2,7 @@ import logging
 import asyncio
 
 from fastapi import HTTPException
-from tortoise import Tortoise, connections
+from tortoise import Tortoise
 from tortoise.exceptions import DBConnectionError
 
 from config.settings import TORTOISE_ORM_CONFIG
