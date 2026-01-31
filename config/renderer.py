@@ -18,13 +18,18 @@ async def custom_request_validation_exception_handler(request, exc):
 
 async def custom_validation_error_handler(request, exc):
     error_message = "Validation Error!"
-    if exc.errors()[0].get('ctx', {}):
-        error_detail = exc.errors()[0].get('ctx', {}).get('error')
+    errors = exc.errors()
+    if not errors:
+        error_detail = "Something went wrong"
         data = None
     else:
-        error_detail = exc.errors()[0].get('msg', 'Something went wrong')
-        data = exc.errors()[0]
-    response_data = {"message": error_message, "detail": f'{error_detail}', 'data': data}
+        err = errors[0]
+        if err.get("ctx"):
+            error_detail = err.get("ctx", {}).get("error", err.get("msg", "Something went wrong"))
+        else:
+            error_detail = err.get("msg", "Something went wrong")
+        data = err
+    response_data = {"success": False, "message": error_message, "detail": str(error_detail), "data": data}
     return JSONResponse(content=jsonable_encoder(response_data), status_code=400)
 
 

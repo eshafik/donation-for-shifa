@@ -1,10 +1,14 @@
-from fastapi.exceptions import RequestValidationError, HTTPException
-from fastapi.responses import JSONResponse
-from functools import wraps
-from typing import Callable, Any, Dict
+import logging
 import traceback
+from functools import wraps
+from typing import Any, Callable, Dict
+
+from fastapi.exceptions import HTTPException, RequestValidationError
+from fastapi.responses import JSONResponse
 
 from config.settings import DEBUG
+
+logger = logging.getLogger(__name__)
 
 
 def response_wrapper(func: Callable) -> Callable:
@@ -45,17 +49,19 @@ def response_wrapper(func: Callable) -> Callable:
             )
 
         except Exception as e:
-            traceback_str = ''.join(traceback.format_tb(e.__traceback__))
+            traceback_str = "".join(traceback.format_tb(e.__traceback__))
+            # Log 500 errors to terminal so they appear in server logs
+            logger.exception("Unhandled exception in %s: %s", func.__name__, e)
             content = {
-                    "success": False,
-                    "message": str(e),
-                    "details": traceback_str
-                }
+                "success": False,
+                "message": str(e),
+                "details": traceback_str if DEBUG else None,
+            }
             if DEBUG:
-                content['details'] = traceback_str
+                content["details"] = traceback_str
             return JSONResponse(
                 status_code=500,
-                content=content
+                content=content,
             )
 
     return wrapper

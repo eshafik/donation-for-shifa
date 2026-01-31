@@ -1,0 +1,12 @@
+[project]
+name = "fastapi-boilerplate"
+version = "0.1.0"
+description = "Django-inspired FastAPI with Tortoise ORM, Pydantic v2, Celery, JWT auth"
+requires-python = ">=3.14"
+dependencies = []
+
+[tool.aerich]
+# Migrations at project root: migrations/<app_label>/ (e.g. migrations/user/, migrations/posts/)
+# Aerich creates a subfolder per Tortoise app when you run --app <label>
+location = "migrations"
+tortoise_orm = "config.settings.TORTOISE_ORM_CONFIG"
