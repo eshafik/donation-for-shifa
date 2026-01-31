@@ -183,6 +183,8 @@ After `python manage.py makemigrations user`, look for new files in **`migration
 
 **First time (including after clone):** run `makemigrations` for each app that has models, then `migrate`. No separate init command.
 
+**PostgreSQL / MySQL:** The user migration files in this repo are generated from SQLite (the default dev database). If you use another database (e.g. PostgreSQL or MySQL), delete the app’s migration folder (e.g. `migrations/user/`) and run `makemigrations <app_label>` again, then `migrate`.
+
 ### Create migrations
 
 When an app has no migrations yet (first time or new app), or when you change models (add/remove fields or models):
