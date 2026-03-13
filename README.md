@@ -1,255 +1,214 @@
-# FastAPI Boilerplate
+# Donation for Shifa
 
-A Django-inspired FastAPI structure for rapid API development on **Python 3.14**, with Tortoise ORM, Pydantic v2, Celery, and JWT auth.
+An open-source donation management platform built with **FastAPI**, **Tortoise ORM**, and **PostgreSQL**. Tracks received donations, records distributions to recipients, and accepts public financial assistance applications — with a transparent, publicly readable API and a secure admin panel.
 
-## Requirements
-
-- **Python 3.14** (see `.python-version`)
-- Redis (for Celery broker/backend and optional auth cache)
-- SQLite (default dev DB), or PostgreSQL/MySQL via `DATABASE_URL`
+---
 
 ## Features
 
-- **Django-like app layout**: Discrete apps (`apps/user`, `apps/posts`, …) with `models.py`, `schemas.py`, `routes.py`, `views.py`, `services.py`, `tasks.py`
-- **Django-like migrations**: Per-app migrations with Aerich (`makemigrations <app>`, `migrate`)
-- **Tortoise ORM**: Async ORM with connection pooling and Pydantic v2 serialization
-- **Pydantic v2**: Request/response schemas with `model_validate` and `from_attributes`
-- **Celery**: Background tasks with Redis broker; CLI `python manage.py runcelery`
-- **JWT auth**: Bearer tokens, `request.state.user`, optional Redis user cache
-- **CLI**: `python manage.py startapp`, `runserver`, `runcelery`, `runbeat`, `runscript`, `makemigrations`, `migrate`
-- **OpenAPI**: Tags and response models per app for Swagger/ReDoc
+- **Donation tracking** — admin records every received donation with donor name, transaction number, amount, and date
+- **Distribution transparency** — admin logs every distribution to a recipient; visible to the public
+- **Public applications** — anyone can submit a financial assistance application; rate-limited to 5 per IP per 24 hours
+- **Stats summary** — live aggregated totals (collected vs. distributed) cached in Redis
+- **JWT authentication** — Bearer token auth with admin-only role enforcement
+- **Django-inspired app layout** — each feature in its own app (`models`, `schemas`, `routes`, `views`, `services`, `tasks`)
+- **Per-app migrations** — Aerich migrations per app, stored in `migrations/<app_label>/`
+- **Background tasks** — Celery worker + Beat scheduler with Redis broker
+- **CORS support** — configurable allowed origins via environment variable
 
-## Project structure
+---
+
+## Tech Stack
+
+| Layer         | Technology                        |
+|---------------|-----------------------------------|
+| Framework     | FastAPI (Python 3.14)             |
+| ORM           | Tortoise ORM (async)              |
+| Database      | PostgreSQL (SQLite for dev)       |
+| Migrations    | Aerich                            |
+| Validation    | Pydantic v2                       |
+| Auth          | JWT (HS256)                       |
+| Cache         | Redis (optional)                  |
+| Task queue    | Celery + Redis                    |
+
+---
+
+## Project Structure
 
 ```
 donation-for-shifa/
 ├── apps/
-│   ├── user/           # Auth app (signup, token, me)
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   ├── routes.py
-│   │   ├── views.py
-│   │   ├── services.py
-│   │   └── tasks.py
-│   └── ...
-├── migrations/         # Per-app migration files (Aerich): migrations/user/, migrations/posts/, ...
+│   ├── user/           # Auth — signup, login, profile
+│   ├── donation/       # Received donations — admin CRUD + public list
+│   ├── distribution/   # Distributions to recipients — admin CRUD + public list
+│   ├── application/    # Financial assistance applications — public submit + admin review
+│   └── stats/          # Summary stats endpoint (no model)
+├── migrations/         # Per-app migration files: migrations/user/, migrations/donation/, ...
 ├── config/
-│   ├── settings.py     # INSTALLED_APPS, DB, Celery, JWT, Redis
-│   ├── db.py
-│   ├── celery.py
-│   ├── middleware.py  # JWT auth + process-time
-│   ├── renderer.py    # Validation/HTTP error responses
-│   └── exceptions.py  # ORM (DoesNotExist, IntegrityError) handlers
+│   ├── settings.py     # INSTALLED_APPS, DB, Celery, JWT, Redis, CORS
+│   ├── db.py           # Tortoise init/close
+│   ├── celery.py       # Celery app
+│   ├── middleware.py   # JWT auth middleware
+│   ├── renderer.py     # Validation/HTTP error responses
+│   └── exceptions.py  # ORM exception handlers
 ├── core/
-│   ├── auth.py        # get_current_user, get_current_user_optional
-│   ├── serializers.py # Base Pydantic/Tortoise serialization patterns
-│   └── dependencies.py
-├── utils/             # jwt, security, response_wrapper, pagination, etc.
+│   ├── auth.py         # get_current_user, get_admin_user dependencies
+│   ├── cache.py        # Optional Redis client
+│   └── dependencies.py # Shared FastAPI dependencies
+├── utils/
+│   ├── jwt.py
+│   ├── security.py     # bcrypt password hashing
+│   ├── response_wrapper.py
+│   ├── pagination.py
+│   └── rate_limiter.py # IP-based rate limiter (Redis-backed)
 ├── main.py
-└── manage.py
-```
-
-## Create a new app
-
-```bash
-python manage.py startapp myapp
-```
-
-Then add `apps.myapp` to `INSTALLED_APPS` in `config/settings.py`.
-
-## Register apps
-
-In `config/settings.py`:
-
-```python
-INSTALLED_APPS = [
-    "apps.user",
-    # "apps.posts",
-]
-```
-
-## Run the API
-
-```bash
-python manage.py runserver
-```
-
-Options: `--host 0.0.0.0 --port 8000`
-
-## Run a script (with DB)
-
-```bash
-python manage.py runscript pyscript.py
-```
-
-## Celery worker and beat
-
-### Production: run Beat and worker separately (recommended)
-
-Run **one** Celery Beat process (scheduler) and **one or more** worker processes. Beat only enqueues periodic tasks; workers execute them. This keeps scheduling reliable and lets you scale workers independently.
-
-**Terminal 1 – Beat (scheduler):**
-
-```bash
-python manage.py runbeat
-```
-
-**Terminal 2 – Worker(s):**
-
-```bash
-python manage.py runcelery
-```
-
-Optional Beat options: `-s/--schedule` (schedule DB path), `-l/--loglevel`, `-f/--logfile`, `--pidfile`, `--max-interval`. Example with a custom schedule file and pidfile (e.g. for a process manager):
-
-```bash
-python manage.py runbeat -s /var/run/celery/celerybeat-schedule --pidfile /var/run/celery/beat.pid
-```
-
-### Development / simple setup: worker with embedded Beat
-
-You can run the scheduler in the **same process** as the worker using the `-B` flag. This is convenient for local development or very small deployments, but in production a separate Beat process is preferred.
-
-```bash
-python manage.py runcelery -B
+├── manage.py           # CLI: runserver, startapp, makemigrations, migrate, runcelery, ...
+├── API.md              # Full API reference with examples
+└── env.example
 ```
 
 ---
 
-### Run Celery worker (options)
+## Getting Started
 
-Default (no options):
+### Prerequisites
+
+- Python 3.14
+- PostgreSQL
+- Redis (optional — for caching and Celery; app degrades gracefully without it)
+
+### Installation
 
 ```bash
-python manage.py runcelery
+git clone https://github.com/your-username/donation-for-shifa.git
+cd donation-for-shifa
+
+python -m venv venv
+source venv/bin/activate       # Windows: venv\Scripts\activate
+
+pip install -r requirements.txt   # or: pip install -e .
 ```
 
-Worker options (Celery 5.x worker CLI):
-
-| Option | Short | Description | Example |
-|--------|-------|--------------|---------|
-| `--concurrency` | `-c` | Number of worker processes (default: CPU count) | `-c 4` |
-| `--pool` | `-P` | Pool type: `prefork`, `eventlet`, `gevent`, `solo`, `threads` | `-P threads` |
-| `--queues` | `-Q` | Comma-separated queue names to consume | `-Q default,high` |
-| `--loglevel` | `-l` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL | `-l DEBUG` |
-| `--hostname` | `-n` | Custom worker hostname | `-n worker1@%h` |
-| `--autoscale` | | Autoscale workers (max,min) | `--autoscale 10,3` |
-| `--beat` | `-B` | Run beat scheduler in the same process | `-B` |
-| `--logfile` | `-f` | Log to file instead of stderr | `-f celery.log` |
-
-Examples:
+### Environment
 
 ```bash
-# 4 worker processes, prefork pool (default)
-python manage.py runcelery -c 4
+cp env.example .env
+```
 
-# Thread pool with 8 threads
-python manage.py runcelery -P threads -c 8
+Edit `.env`:
 
-# Consume only 'default' and 'high' queues
-python manage.py runcelery -Q default,high
+```env
+FASTAPI_ENV=development
+DATABASE_URL=postgres://user:password@localhost:5432/donation
+REDIS_URL=redis://localhost:6379/1
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+JWT_SECRET_KEY=change-me-in-production
+JWT_ALGORITHM=HS256
+JWT_ACCESS_EXPIRE_MINUTES=1440
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+```
 
-# Debug logging
-python manage.py runcelery -l DEBUG
+### Database Setup
 
-# Autoscale between 3 and 10 workers
-python manage.py runcelery --autoscale 10,3
+```bash
+createdb donation
 
-# Run worker and beat together (dev/simple only)
+python manage.py makemigrations user
+python manage.py makemigrations donation
+python manage.py makemigrations distribution
+python manage.py makemigrations application
+python manage.py migrate
+```
+
+### Run the Server
+
+```bash
+python manage.py runserver
+# API available at http://localhost:8000
+# Swagger UI at  http://localhost:8000/docs
+# ReDoc at       http://localhost:8000/redoc
+```
+
+---
+
+## API Overview
+
+Full documentation with request/response examples is in **[API.md](./API.md)**.
+
+| Method   | Path                                              | Auth   | Description                         |
+|----------|---------------------------------------------------|--------|-------------------------------------|
+| `POST`   | `/api/v1/user/signup`                             | —      | Register a new user                 |
+| `POST`   | `/api/v1/user/token`                              | —      | Obtain JWT token                    |
+| `GET`    | `/api/v1/user/me`                                 | JWT    | Current user profile                |
+| `GET`    | `/api/v1/donations`                               | —      | Public list of donations            |
+| `GET`    | `/api/v1/admin/donations`                         | Admin  | Admin list with search/date filter  |
+| `POST`   | `/api/v1/admin/donations`                         | Admin  | Create donation record              |
+| `GET`    | `/api/v1/admin/donations/{id}`                    | Admin  | Get donation by ID                  |
+| `PUT`    | `/api/v1/admin/donations/{id}`                    | Admin  | Update donation                     |
+| `DELETE` | `/api/v1/admin/donations/{id}`                    | Admin  | Delete donation                     |
+| `GET`    | `/api/v1/distributions`                           | —      | Public list of distributions        |
+| `GET`    | `/api/v1/admin/distributions`                     | Admin  | Admin list with search/date filter  |
+| `POST`   | `/api/v1/admin/distributions`                     | Admin  | Create distribution record          |
+| `GET`    | `/api/v1/admin/distributions/{id}`                | Admin  | Get distribution by ID              |
+| `PUT`    | `/api/v1/admin/distributions/{id}`                | Admin  | Update distribution                 |
+| `DELETE` | `/api/v1/admin/distributions/{id}`                | Admin  | Delete distribution                 |
+| `POST`   | `/api/v1/applications`                            | —      | Submit assistance application       |
+| `GET`    | `/api/v1/admin/applications`                      | Admin  | Admin list with search/status filter|
+| `GET`    | `/api/v1/admin/applications/{id}`                 | Admin  | Get application by ID               |
+| `PATCH`  | `/api/v1/admin/applications/{id}/status`          | Admin  | Update application status           |
+| `GET`    | `/api/v1/stats/summary`                           | —      | Aggregated donation/distribution totals |
+
+---
+
+## Development Commands
+
+```bash
+# Start development server
+python manage.py runserver
+
+# Scaffold a new app
+python manage.py startapp myapp
+
+# Migrations
+python manage.py makemigrations <app_label>
+python manage.py migrate
+python manage.py showmigrations
+
+# Celery worker (development — worker + scheduler in one process)
 python manage.py runcelery -B
+
+# Celery worker and Beat separately (production)
+python manage.py runbeat          # terminal 1: scheduler
+python manage.py runcelery        # terminal 2: worker
+
+# Run a script with DB access
+python manage.py runscript pyscript.py
 ```
 
-### Run Celery Beat only (scheduler)
+---
 
-| Option | Short | Description | Example |
-|--------|-------|--------------|---------|
-| `--schedule` | `-s` | Path to schedule database (default: `celerybeat-schedule`) | `-s /var/run/celery/beat-schedule` |
-| `--loglevel` | `-l` | Log level | `-l INFO` |
-| `--logfile` | `-f` | Log file path | `-f beat.log` |
-| `--pidfile` | | PID file (for daemon/process managers) | `--pidfile /var/run/celery/beat.pid` |
-| `--max-interval` | | Max seconds between schedule iterations | `--max-interval 300` |
+## Creating an Admin User
 
-Example:
+After running migrations, create a user via the signup endpoint, then set `is_admin = true` directly in the database:
 
 ```bash
-python manage.py runbeat -l INFO -s celerybeat-schedule
+psql donation -c "UPDATE users SET is_admin = true WHERE email = 'your@email.com';"
 ```
 
-## Migrations (Django-like, Aerich)
+---
 
-Migration files live at **project root** in **`migrations/<app_label>/`** (e.g. **`migrations/user/`**, **`migrations/posts/`**). They are **not** inside each app (e.g. not in `apps/user/migrations/`). Use the app **label** (the last part of the app path), e.g. `user` for `apps.user`.
+## Contributing
 
-After `python manage.py makemigrations user`, look for new files in **`migrations/user/`** at the project root.
+Contributions are welcome. Please open an issue to discuss your idea before submitting a pull request.
 
-**First time (including after clone):** run `makemigrations` for each app that has models, then `migrate`. No separate init command.
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit your changes
+4. Open a pull request
 
-**PostgreSQL / MySQL:** The user migration files in this repo are generated from SQLite (the default dev database). If you use another database (e.g. PostgreSQL or MySQL), delete the app’s migration folder (e.g. `migrations/user/`) and run `makemigrations <app_label>` again, then `migrate`.
+---
 
-### Create migrations
+## License
 
-When an app has no migrations yet (first time or new app), or when you change models (add/remove fields or models):
-
-1. **Create migration** for that app:
-
-   ```bash
-   python manage.py makemigrations <app_label>
-   ```
-
-   Examples:
-
-   ```bash
-   python manage.py makemigrations user
-   python manage.py makemigrations user --name add_email_index
-   ```
-
-   If the app has no migrations yet, this creates the first migration in `migrations/<app_label>/`. Otherwise it generates a new migration file for your model changes.
-
-2. **Apply all migrations** (all apps):
-
-   ```bash
-   python manage.py migrate
-   ```
-
-   To mark migrations as applied without running SQL (e.g. after applying them manually):
-
-   ```bash
-   python manage.py migrate --fake
-   ```
-
-### Show migration history
-
-```bash
-python manage.py showmigrations              # all apps
-python manage.py showmigrations user        # one app
-```
-
-### After cloning the repo
-
-1. Install dependencies and set up `.env`.
-2. Run migrations for each app that has models (e.g. `user`):
-   ```bash
-   python manage.py makemigrations user
-   python manage.py migrate
-   ```
-   If the repo already includes committed migration files in `migrations/user/`, you only need:
-   ```bash
-   python manage.py migrate
-   ```
-
-### New app
-
-After `python manage.py startapp myapp` and adding `apps.myapp` to `INSTALLED_APPS`:
-
-1. Run `python manage.py makemigrations myapp` (creates first migration in `migrations/myapp/`).
-2. Run `python manage.py migrate`.
-
-Configuration is in `pyproject.toml` under `[tool.aerich]` (location `migrations/`). Aerich is the migration tool for Tortoise ORM; see [Aerich](https://github.com/tortoise/aerich) for more options (e.g. `downgrade`).
-
-## Environment
-
-Copy `env.example` to `.env` and set:
-
-- `FASTAPI_ENV` (development / production)
-- `DATABASE_URL` (default: `sqlite://db.sqlite3`)
-- `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `REDIS_URL`
-- `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_EXPIRE_MINUTES` (for auth)
+This project is open source and available under the [MIT License](LICENSE).
