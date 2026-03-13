@@ -22,7 +22,7 @@ A Django-inspired FastAPI structure for rapid API development on **Python 3.14**
 ## Project structure
 
 ```
-fastapi-boilerplate/
+donation-for-shifa/
 ├── apps/
 │   ├── user/           # Auth app (signup, token, me)
 │   │   ├── models.py

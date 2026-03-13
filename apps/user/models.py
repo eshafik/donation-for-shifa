@@ -10,6 +10,7 @@ class User(models.Model):
     joined_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
     last_login = fields.DatetimeField(null=True)
+    is_admin = fields.BooleanField(default=False)
 
     class Meta:
         default_connection = "default"

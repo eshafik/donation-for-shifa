@@ -8,6 +8,7 @@ from typing import AsyncGenerator
 import uvloop
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from starlette.responses import JSONResponse
 from tortoise import connections
@@ -20,7 +21,7 @@ from config.renderer import (
     custom_http_exception_handler,
     custom_validation_error_handler,
 )
-from config.settings import TORTOISE_ORM_CONFIG, DEBUG, INSTALLED_APPS
+from config.settings import TORTOISE_ORM_CONFIG, DEBUG, INSTALLED_APPS, CORS_ALLOWED_ORIGINS
 from config.middleware import CustomMiddleware
 from core.cache import close_redis
 from tortoise.exceptions import DoesNotExist, IntegrityError
@@ -57,6 +58,13 @@ app = FastAPI(
     ],
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(CustomMiddleware)
 
 # Dynamically include app routers (models are in TORTOISE_ORM_CONFIG from settings)

@@ -9,7 +9,7 @@ from config.settings import (
 )
 
 celery_app = Celery(
-    "fastapi-boilerplate",
+    "donation-for-shifa",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
 )

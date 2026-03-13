@@ -1,8 +1,10 @@
 import time
 from collections import deque, defaultdict
-from typing import Dict
+from typing import Dict, Tuple
 
 from fastapi import Request, HTTPException
+
+from core.cache import get_redis
 
 
 class RateLimiter:
@@ -52,3 +54,28 @@ async def check_rate_limit(request: Request, user_id: str):
             detail=f"Hourly rate limit exceeded. Try again in {retry_after} seconds.",
             headers={"Retry-After": str(retry_after)}
         )
+
+
+async def check_ip_rate_limit(
+    request: Request,
+    max_requests: int = 5,
+    window_seconds: int = 86400,
+) -> None:
+    """Redis-backed IP rate limiter for public submission endpoints (5/IP/24h).
+    Falls back silently if Redis is unavailable (dev mode without Redis)."""
+    ip = request.client.host
+    redis = get_redis()
+    if not redis:
+        return
+    key = f"ratelimit:apply:{ip}"
+    try:
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, window_seconds)
+        if count > max_requests:
+            raise HTTPException(status_code=429, detail="Too many submissions. Try again tomorrow.")
+    except HTTPException:
+        raise
+    except Exception:
+        # Redis unavailable — silently allow request (dev mode / no Redis)
+        return

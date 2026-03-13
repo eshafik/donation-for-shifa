@@ -40,6 +40,13 @@ async def get_current_user(request: Request) -> User:
     return user
 
 
+async def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    """Require current user to be an admin. Raises 403 if not."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 async def get_current_user_optional(request: Request) -> Optional[User]:
     """Return current user if valid JWT present; otherwise None (for public endpoints that show extra data when logged in)."""
     if hasattr(request.state, "user"):

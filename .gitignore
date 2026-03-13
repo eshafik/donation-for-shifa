@@ -88,3 +88,6 @@ pip-requirements/
 .env.*
 .env
 *.sqlite*
+CLAUDE.md
+FRONTEND_PLAN.md
+PLAN.md

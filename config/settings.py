@@ -17,6 +17,10 @@ DEBUG = FASTAPI_ENV == 'development'
 # Installed apps (Django-like); each gets its own Tortoise "app" for per-app migrations
 INSTALLED_APPS = [
     "apps.user",
+    "apps.donation",
+    "apps.distribution",
+    "apps.application",
+    "apps.stats",
 ]
 
 # Database settings
@@ -53,6 +57,13 @@ TORTOISE_ORM_CONFIG = {
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/1')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+
+# CORS settings (comma-separated list of allowed origins)
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
 
 # JWT auth
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'change-me-in-production')
